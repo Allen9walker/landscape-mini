@@ -236,6 +236,28 @@ wait_for_guest_ssh() {
     return 1
 }
 
+wait_for_guest_command() {
+    local desc="$1"
+    local timeout="$2"
+    local interval="$3"
+    shift 3
+
+    local elapsed=0
+    while [[ $elapsed -lt $timeout ]]; do
+        if "$@" &>/dev/null; then
+            return 0
+        fi
+        sleep "${interval}"
+        ((elapsed += interval))
+        if ((elapsed < timeout)) && ((elapsed % 15 == 0)); then
+            info "  ...waiting for ${desc} (${elapsed}s)" >&2
+        fi
+    done
+
+    return 1
+}
+
+
 # ── Landscape API Compatibility Layer ─────────────────────────────────────────
 
 API_BASE="${API_BASE:-}"

@@ -104,10 +104,11 @@ setup-mirror.sh
 
 ## 默认凭据
 
-| 用户 | 密码 |
-|------|------|
-| `root` | `landscape` |
-| `ld` | `landscape` |
+| 场景 | 用户 | 密码 |
+|------|------|------|
+| SSH / 系统登录 | `root` | `landscape` |
+| SSH / 系统登录 | `ld` | `landscape` |
+| 管理网页 | `root` | `root` |
 
 ## 构建配置
 

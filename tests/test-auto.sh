@@ -345,8 +345,17 @@ run_all_checks() {
     run_check "User root exists" guest_run "id root"
     run_check "User ld exists" guest_run "id ld"
 
-    run_check "landscape-router service active" \
-        check_service_active "landscape-router"
+    if [[ "${INIT_SYSTEM}" == "systemd" ]]; then
+        wait_for_guest_command "landscape-router service" 30 3 \
+            guest_run "systemctl is-active --quiet landscape-router"
+        run_check "landscape-router service active" \
+            guest_run "systemctl is-active --quiet landscape-router"
+    else
+        wait_for_guest_command "landscape-router service" 30 3 \
+            check_service_active "landscape-router"
+        run_check "landscape-router service active" \
+            check_service_active "landscape-router"
+    fi
     run_check "Landscape binary exists and is executable" \
         guest_run "test -x /root/landscape-webserver"
 
@@ -359,9 +368,13 @@ run_all_checks() {
         test "$ip_fwd" = "1"
 
     if [[ "${INIT_SYSTEM}" == "systemd" ]]; then
+        wait_for_guest_command "sshd service" 30 3 \
+            guest_run "systemctl is-active --quiet ssh || systemctl is-active --quiet sshd"
         run_check "sshd service running" \
-            guest_run "systemctl is-active ssh || systemctl is-active sshd"
+            guest_run "systemctl is-active --quiet ssh || systemctl is-active --quiet sshd"
     else
+        wait_for_guest_command "sshd service" 30 3 \
+            check_service_active "sshd"
         run_check "sshd service running" \
             check_service_active "sshd"
     fi
@@ -373,6 +386,8 @@ run_all_checks() {
         guest_run "command -v bpftool >/dev/null 2>&1 || test -x /usr/sbin/bpftool || test -x /usr/bin/bpftool"
 
     if guest_run "command -v docker >/dev/null 2>&1 || test -x /usr/bin/docker || test -x /usr/sbin/docker" &>/dev/null; then
+        wait_for_guest_command "docker service" 45 3 \
+            check_service_active "docker"
         run_check "Docker service active" \
             check_service_active "docker"
     else
