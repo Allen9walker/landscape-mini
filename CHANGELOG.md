@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-04-14
+
 ### Fixed / 修复
 
 - Fix tagged release builds to keep using the upstream Landscape version from `build.env`, harden asset downloads, and make manual retest workflows restore build metadata from the correct path / 修复 tag 发布时错误使用仓库版本号替代上游 Landscape 版本的问题，加固资源下载校验，并修正手动复测 workflow 的 build metadata 路径
@@ -118,7 +120,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add concurrency group to prevent duplicate CI runs / 添加并发组以防止 CI 重复运行 (`ee11fe2`)
 - Add contents write permission for release job / 为发布任务添加内容写入权限 (`97b6240`)
 
-[Unreleased]: https://github.com/Cloud370/landscape-mini/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/Cloud370/landscape-mini/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/Cloud370/landscape-mini/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/Cloud370/landscape-mini/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/Cloud370/landscape-mini/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/Cloud370/landscape-mini/compare/v0.2.1...v0.2.2
