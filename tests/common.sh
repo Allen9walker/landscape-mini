@@ -737,6 +737,40 @@ landscape_router_dump_diagnostics() {
     fi
 }
 
+
+wait_for_landscape_interfaces_ready() {
+    local token="$1"
+    local ready_timeout="${2:-${LANDSCAPE_ROUTER_READY_TIMEOUT}}"
+    local start_ts now_ts payload names
+
+    start_ts=$(date +%s)
+    while :; do
+        payload=$(landscape_api_interfaces "$token" 2>/dev/null || true)
+        if printf '%s' "$payload" | jq -e . >/dev/null 2>&1; then
+            names=$(printf '%s' "$payload" | jq -r '
+                [
+                  (.data.managed[]?.config.name // empty),
+                  (.data.managed[]?.status.iface_name // empty),
+                  (.data.unmanaged[]?.config.name // empty),
+                  (.data.unmanaged[]?.status.iface_name // empty)
+                ]
+                | map(select(length > 0))
+                | unique
+                | .[]
+            ' 2>/dev/null || true)
+            if contains_all_text "$names" "$LANDSCAPE_EXPECTED_WAN_IFACE" "$LANDSCAPE_EXPECTED_LAN_IFACE"; then
+                return 0
+            fi
+        fi
+
+        now_ts=$(date +%s)
+        if (( now_ts - start_ts >= ready_timeout )); then
+            return 1
+        fi
+        sleep "$LANDSCAPE_API_READY_INTERVAL"
+    done
+}
+
 landscape_router_wait_ready() {
     local label="${1:-Router}"
     local ssh_timeout="${2:-${SSH_TIMEOUT:-120}}"
@@ -748,7 +782,6 @@ landscape_router_wait_ready() {
     local interfaces_state="pending"
     local -a service_states=()
     local token=""
-    local ifaces=""
     local service_key iface binding failure_reason=""
 
     LANDSCAPE_ROUTER_API_TOKEN=""
@@ -790,8 +823,7 @@ landscape_router_wait_ready() {
     fi
     api_layout_state="ready"
 
-    ifaces=$(landscape_api_interfaces "$token" 2>/dev/null || true)
-    if ! contains_all_text "$ifaces" "$LANDSCAPE_EXPECTED_WAN_IFACE" "$LANDSCAPE_EXPECTED_LAN_IFACE"; then
+    if ! wait_for_landscape_interfaces_ready "$token" "$ready_timeout"; then
         interfaces_state="failed"
         failure_reason="expected interfaces missing from api"
         landscape_router_write_readiness_snapshot failed "$failure_reason" "$ssh_state" "$api_listener_state" "$api_login_state" "$api_layout_state" "$interfaces_state"

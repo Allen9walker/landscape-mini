@@ -138,30 +138,6 @@ probe_url() {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: extract median value from newline-delimited numeric samples
-# ---------------------------------------------------------------------------
-median_speed() {
-    awk '
-        { values[count++] = $1 }
-        END {
-            if (count == 0) {
-                exit 1
-            }
-            for (i = 0; i < count; i++) {
-                for (j = i + 1; j < count; j++) {
-                    if (values[i] > values[j]) {
-                        tmp = values[i]
-                        values[i] = values[j]
-                        values[j] = tmp
-                    }
-                }
-            }
-            print values[int(count / 2)]
-        }
-    '
-}
-
-# ---------------------------------------------------------------------------
 # Helper: extract first package path from Debian-style Packages content
 # ---------------------------------------------------------------------------
 extract_debian_package_path() {
@@ -299,11 +275,10 @@ select_best_source() {
     local probe_mode="$3"
     local probe_target="$4"
     local timeout_seconds="${5:-5}"
-    local sample_bytes="${6:-1048576}"
-    local probe_attempts="${7:-3}"
+    local sample_bytes="${6:-5242880}"
     local best_candidate=""
     local best_speed=""
-    local candidate representative_url measured_speed median_value samples attempt
+    local candidate representative_url measured_speed
 
     for candidate in ${candidates}; do
         case "${probe_mode}" in
@@ -334,32 +309,15 @@ select_best_source() {
                 ;;
         esac
 
-        samples=""
         echo "  Probing ${source_name}: ${representative_url}" >&2
-        for attempt in $(seq 1 "${probe_attempts}"); do
-            if measured_speed=$(probe_url "${representative_url}" "${timeout_seconds}" "${sample_bytes}"); then
-                samples+="${measured_speed}"$'\n'
-                echo "    attempt ${attempt}/${probe_attempts}: ${measured_speed} B/s" >&2
-            else
-                echo "  [SKIP] ${source_name}: ${candidate} (attempt ${attempt}/${probe_attempts})" >&2
-                samples=""
-                break
+        if measured_speed=$(probe_url "${representative_url}" "${timeout_seconds}" "${sample_bytes}"); then
+            echo "  [OK] ${source_name}: ${candidate} (${measured_speed} B/s)" >&2
+            if [[ -z "${best_candidate}" ]] || awk "BEGIN {exit !(${measured_speed} > ${best_speed})}"; then
+                best_candidate="${candidate}"
+                best_speed="${measured_speed}"
             fi
-        done
-
-        if [[ -z "${samples}" ]]; then
-            continue
-        fi
-
-        median_value=$(printf '%s' "${samples}" | median_speed) || {
+        else
             echo "  [SKIP] ${source_name}: ${candidate}" >&2
-            continue
-        }
-
-        echo "  [OK] ${source_name}: ${candidate} (median ${median_value} B/s)" >&2
-        if [[ -z "${best_candidate}" ]] || awk "BEGIN {exit !(${median_value} > ${best_speed})}"; then
-            best_candidate="${candidate}"
-            best_speed="${median_value}"
         fi
     done
 
@@ -383,7 +341,6 @@ resolve_source() {
     local source_origin_var_name="$7"
     local timeout_seconds="${8:-5}"
     local sample_bytes="${9:-5242880}"
-    local probe_attempts="${10:-3}"
     local resolved_value
 
     if [[ -n "${explicit_value}" ]]; then
@@ -393,7 +350,7 @@ resolve_source() {
         return 0
     fi
 
-    if ! resolved_value=$(select_best_source "${source_name}" "${candidates}" "${probe_mode}" "${probe_target}" "${timeout_seconds}" "${sample_bytes}" "${probe_attempts}"); then
+    if ! resolved_value=$(select_best_source "${source_name}" "${candidates}" "${probe_mode}" "${probe_target}" "${timeout_seconds}" "${sample_bytes}"); then
         echo "ERROR: No healthy ${source_name} candidates found." >&2
         return 1
     fi
