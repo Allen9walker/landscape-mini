@@ -4,7 +4,7 @@
 
 [English](docs/en/README.md) | 中文 | [贡献流程](CONTRIBUTING.md) | [**下载最新镜像**](https://github.com/Cloud370/landscape-mini/releases/latest)
 
-Landscape Router 的最小化 x86 镜像构建器。支持 **Debian Trixie** 和 **Alpine Linux** 两种基础系统，可生成精简磁盘镜像（压缩后最小约 76MB），并支持 BIOS + UEFI 双启动。
+Landscape Router 的最小化 x86 镜像构建器。支持 **Debian Trixie** 和 **Alpine Linux** 两种基础系统，可生成精简磁盘镜像，并支持 BIOS + UEFI 双启动。
 
 上游项目：[Landscape Router](https://github.com/ThisSeanZhang/landscape)
 
@@ -29,11 +29,11 @@ Landscape Router 的最小化 x86 镜像构建器。支持 **Debian Trixie** 和
 ## 特性
 
 - 同时支持 Debian 和 Alpine 两种基础系统
-- 镜像体积尽量压小，拿来就能直接跑
+- 镜像身份由显式组合定义：`base_system + include_docker + output_formats`
+- 输出格式支持 `img`、`vmdk`、`pve-ova`
 - 支持 BIOS + UEFI，常见虚拟化环境都比较友好
-- 可以按需带上 Docker
-- GitHub Actions 已经接好了，支持自动构建、测试和发布
 - fork 用户也可以直接在 GitHub 上跑自定义构建
+- GitHub Actions 已经接好，支持自动构建、测试和发布
 
 ## 本地开发
 
@@ -45,28 +45,32 @@ Landscape Router 的最小化 x86 镜像构建器。支持 **Debian Trixie** 和
 # 安装构建依赖（首次）
 make deps
 
-# 构建 Debian 镜像
+# 默认组合：debian + no-docker + img
 make build
 
-# 构建 Alpine 镜像（更小）
-make build-alpine
+# Alpine raw image
+make build BASE_SYSTEM=alpine
 
-# 构建含 Docker 的镜像
-make build-docker
-make build-alpine-docker
+# Debian + Docker + img,pve-ova
+make build INCLUDE_DOCKER=true OUTPUT_FORMATS=img,pve-ova
+
+# Alpine + Docker + img,vmdk,pve-ova
+make build BASE_SYSTEM=alpine INCLUDE_DOCKER=true OUTPUT_FORMATS=img,vmdk,pve-ova
 ```
 
 ### 本地测试
 
 ```bash
 # 自动化 readiness 检查（无需交互）
-make deps-test      # 首次需安装测试依赖
-make test           # Debian readiness
-make test-alpine    # Alpine readiness
+make deps-test
+make test
 
-# 数据面测试（双 VM：路由器 + 客户端）
-make test-dataplane        # Debian dataplane
-make test-dataplane-alpine # Alpine dataplane
+# 数据面测试仅适用于 include_docker=false 的 raw image
+make test-dataplane
+
+# 也可以直接指定任意 raw image
+./tests/test-readiness.sh output/landscape-mini-x86-alpine.img
+./tests/test-dataplane.sh output/landscape-mini-x86-debian.img
 
 # 交互式启动（串口控制台）
 make test-serial
@@ -77,14 +81,24 @@ make test-serial
 ### 物理机 / U 盘
 
 ```bash
-dd if=output/landscape-mini-x86.img of=/dev/sdX bs=4M status=progress
+dd if=output/landscape-mini-x86-debian.img of=/dev/sdX bs=4M status=progress
 ```
 
 ### Proxmox VE (PVE)
 
+推荐两种方式：
+
+#### 方式 1：直接使用 `pve-ova`
+
+- 构建时包含 `pve-ova` 输出格式
+- 上传生成的 `.ova`
+- 在 PVE 中导入后检查启动模式、磁盘控制器和 bridge 绑定
+
+#### 方式 2：使用 raw `.img`
+
 1. 上传镜像到 PVE 服务器
 2. 创建虚拟机（不添加磁盘）
-3. 导入磁盘：`qm importdisk <vmid> landscape-mini-x86.img local-lvm`
+3. 导入磁盘：`qm importdisk <vmid> landscape-mini-x86-debian.img local-lvm`
 4. 在 VM 硬件设置中挂载导入的磁盘
 5. 设置启动顺序，启动虚拟机
 
@@ -94,35 +108,10 @@ dd if=output/landscape-mini-x86.img of=/dev/sdX bs=4M status=progress
 
 ```bash
 bash <(curl -sL https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh) \
-    dd --img='https://github.com/Cloud370/landscape-mini/releases/latest/download/landscape-mini-x86.img.gz'
+    dd --img='https://github.com/Cloud370/landscape-mini/releases/latest/download/landscape-mini-x86-debian.img.gz'
 ```
 
 > 根分区会在首次启动时自动扩展以填满整个磁盘，无需手动操作。
-
-## 部署后常用操作
-
-### 换源（国内镜像）
-
-部署后如需将软件源切换到国内镜像以加速 `apt` / `apk` 操作，镜像内置了 `setup-mirror.sh` 工具：
-
-```bash
-# 查看当前源配置
-setup-mirror.sh show
-
-# 一键切换到国内镜像
-setup-mirror.sh tuna       # 清华 TUNA
-setup-mirror.sh aliyun     # 阿里云
-setup-mirror.sh ustc       # 中科大
-setup-mirror.sh huawei     # 华为云
-
-# 恢复官方源
-setup-mirror.sh reset
-
-# 交互式选择
-setup-mirror.sh
-```
-
-自动检测 Debian / Alpine 系统，切换后自动执行 `apt update` 或 `apk update`。
 
 ## 默认凭据
 
@@ -140,18 +129,15 @@ setup-mirror.sh
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
+| `BASE_SYSTEM` | `debian` | 基础系统：`debian` / `alpine` |
+| `INCLUDE_DOCKER` | `false` | 是否包含 Docker：`true` / `false` |
+| `OUTPUT_FORMATS` | `img` | 输出格式列表：`img`、`vmdk`、`pve-ova`，逗号分隔 |
 | `APT_MIRROR` | _(auto probe)_ | Debian 软件源显式覆盖；如果为空则从候选列表自动探测 |
-| `APT_MIRROR_CANDIDATES` | `deb.debian.org` + 常见公共镜像 | Debian 软件源候选列表（按空格分隔） |
 | `ALPINE_MIRROR` | _(auto probe)_ | Alpine 软件源显式覆盖；如果为空则从候选列表自动探测 |
-| `ALPINE_MIRROR_CANDIDATES` | `dl-cdn.alpinelinux.org` + 常见公共镜像 | Alpine 软件源候选列表（按空格分隔） |
 | `DOCKER_APT_MIRROR` | _(auto probe)_ | Debian Docker APT 仓库显式覆盖；如果为空则从候选列表自动探测 |
-| `DOCKER_APT_MIRROR_CANDIDATES` | Docker 官方 + 常见公共镜像 | Debian Docker APT 仓库候选列表（按空格分隔） |
 | `DOCKER_APT_GPG_URL` | _(auto probe)_ | Debian Docker APT GPG key 显式覆盖；如果为空则从候选列表自动探测 |
-| `DOCKER_APT_GPG_URL_CANDIDATES` | Docker 官方 + 常见公共镜像 | Debian Docker APT GPG key 候选列表（按空格分隔） |
-| `LANDSCAPE_VERSION` | `v0.18.2` | 上游 Landscape 版本号（或指定 tag） |
+| `LANDSCAPE_VERSION` | `v0.18.2` | 上游 Landscape 版本号 |
 | `LANDSCAPE_REPO` | `https://github.com/ThisSeanZhang/landscape` | 上游 Landscape 发布仓库 |
-| `OUTPUT_FORMAT` | `img` | 输出格式：`img`、`vmdk`、`both` |
-| `COMPRESS_OUTPUT` | `yes` | 是否压缩输出镜像 |
 | `IMAGE_SIZE_MB` | `2048` | 初始镜像大小（最终会自动缩小） |
 | `ROOT_PASSWORD` | `landscape` | root / ld 登录密码 |
 | `TIMEZONE` | `Asia/Shanghai` | 时区 |
@@ -159,9 +145,11 @@ setup-mirror.sh
 
 ### 自定义构建（GitHub Actions）
 
-仓库提供 `custom-build.yml`，面向 fork 用户提供单变体构建入口，支持：
+仓库提供 `custom-build.yml`，面向 fork 用户提供组合式构建入口，支持：
 
-- `variant`：`default` / `docker` / `alpine` / `alpine-docker`
+- `base_system`：`debian` / `alpine`
+- `include_docker`：`true` / `false`
+- `output_formats`
 - `landscape_version`
 - `lan_server_ip` / `lan_range_start` / `lan_range_end` / `lan_netmask`
 - `root_password`
@@ -169,50 +157,32 @@ setup-mirror.sh
 
 当前优先级：**direct inputs > secrets > defaults**。
 
-如果你特别注重安全，推荐把密码类信息放在 GitHub Secrets：
-- `CUSTOM_ROOT_PASSWORD`
-- `CUSTOM_API_USERNAME`
-- `CUSTOM_API_PASSWORD`
+workflow 会把以下身份信息写入 `build-metadata.txt`：
 
-workflow 会把**凭据来源信息**按字段写入 `build-metadata.txt`（例如 `api_username_source` / `api_password_source`），同时会记录 `api_username` 的实际值，但不会把密码明文写入 artifact。网络拓扑的有效配置会随 artifact 一起携带为 `effective-landscape_init.toml`，供 `test.yml` 和 release promotion 校验使用。
+- `base_system`
+- `include_docker`
+- `output_formats`
+- `produced_files`
+- `artifact_id`
 
-说明：
-- 如果显式设置 `APT_MIRROR` / `ALPINE_MIRROR` / `DOCKER_APT_MIRROR` / `DOCKER_APT_GPG_URL`，构建会直接使用这些值
-- 如果显式变量为空，构建会从对应候选列表里探测多个备用源，优先选择健康且代表性下载更快的源
-- 如果所有候选源都不可用，构建会在早期直接失败，不再等到后续安装阶段才报错
-- Debian 的 Docker 构建阶段使用解析后的 Docker APT mirror / GPG URL
-- Alpine 的 Docker 包仍然跟随解析后的 Alpine mirror，不额外引入单独 Docker 镜像变量
-- CI 与本地构建共享同一套探测逻辑，最终选中的源会写入 `build-metadata.txt`
-
-## 磁盘分区布局
-
-```text
-┌──────────────┬────────────┬────────────┬──────────────────────────┐
-│ BIOS boot    │ EFI System │ Root (/)   │                          │
-│ 1 MiB        │ 200 MiB    │ 剩余空间    │  ← 构建后自动缩小        │
-│ (无文件系统) │ FAT32      │ ext4       │                          │
-├──────────────┼────────────┼────────────┤                          │
-│ GPT: EF02    │ GPT: EF00  │ GPT: 8300  │                          │
-└──────────────┴────────────┴────────────┴──────────────────────────┘
-```
+网络拓扑的有效配置会随 artifact 一起携带为 `effective-landscape_init.toml`，供 `test.yml` 和 release promotion 校验使用。
 
 ## 自动化测试
 
 ### Readiness 检查
 
-`make test` / `make test-alpine` 执行统一的 router readiness 契约验证：
+`make test` 或 `./tests/test-readiness.sh <image.img>` 执行统一的 router readiness 契约验证：
 
 1. 复制镜像到临时文件（保护构建产物）
 2. 后台启动 QEMU（自动检测 KVM）
 3. 等待 SSH、API listener、API login、layout 检测完成
 4. 验证 `eth0` / `eth1` 以及核心服务进入 running
-5. 输出 readiness / service / diagnostics 快照并清理 QEMU
-
-自动适配 systemd（Debian）和 OpenRC（Alpine）两种 init 系统。
+5. 当 `include_docker=true` 时额外验证 Docker 可用
+6. 输出 readiness / service / diagnostics 快照并清理 QEMU
 
 ### Dataplane 测试
 
-`make test-dataplane` / `make test-dataplane-alpine` 使用双 VM 拓扑验证真实 client-visible dataplane：
+`make test-dataplane` 或 `./tests/test-dataplane.sh <image.img>` 使用双 VM 拓扑验证真实 client-visible dataplane：
 
 ```text
 Router VM (eth0=WAN/SLIRP, eth1=LAN/mcast) ←→ Client VM (CirrOS, eth0=mcast)
@@ -220,26 +190,18 @@ Router VM (eth0=WAN/SLIRP, eth1=LAN/mcast) ←→ Client VM (CirrOS, eth0=mcast)
 
 测试项：DHCP 分配、Router API 中 lease 可见、Router ↔ Client LAN 连通。
 
-测试日志输出到 `output/test-logs/`。
-
-## QEMU 测试端口
-
-| 服务 | 宿主机端口 | 说明 |
-|------|-----------|------|
-| SSH | 2222 | `ssh -p 2222 root@localhost` |
-| Web UI | 9800 | `http://localhost:9800` |
+> dataplane 调度规则基于 `include_docker=false`，而不是旧的 variant 名称。
 
 ## CI/CD
 
-- **CI**：手动触发始终可用；对 push 到 `main` / PR，仅在构建相关文件、`.github/` 下相关文件或 `CHANGELOG.md` 变更时自动运行，4 个 variant 通过可复用 workflow 独立构建验证
-- **Readiness / E2E 覆盖**：`default`、`alpine` 运行 readiness + dataplane；`docker`、`alpine-docker` 运行 readiness，并显式记录 E2E skipped
-- **Artifact contract**：每个 image artifact 都包含 `.img`、`build-metadata.txt`、`effective-landscape_init.toml`
-- **Custom Build**：`custom-build.yml` 支持 fork 用户按单 variant 构建，并支持 LAN/DHCP、Linux 密码、Web 管理账号密码输入
-- **Manual Retest**：`test.yml` 当前支持按 `run_id` 复测一整组 CI artifacts，并重新传入 SSH / API 凭据；`artifact_suffix` 更适合作为已知 artifact 标识的高级输入，而不是文档承诺的单 artifact 精确复测入口
-- **Release**：推送 `v*` tag 时，`release.yml` 仅 promote 同一 commit 上已通过 CI 的 artifact，校验后压缩并创建 GitHub Release
+- **CI**：手动触发始终可用；对 push 到 `main` / PR，仅在构建相关文件、`.github/` 下相关文件或 `CHANGELOG.md` 变更时自动运行
+- **构建矩阵**：`debian/alpine × include_docker=true/false`
+- **Readiness / E2E 覆盖**：四个组合都跑 readiness；只有 `include_docker=false` 的组合跑 dataplane
+- **Artifact contract**：每个 image artifact 都包含 raw `.img`、`build-metadata.txt`、`effective-landscape_init.toml`，并可按请求附带 `.vmdk` / `.ova`
+- **Custom Build**：`custom-build.yml` 支持 fork 用户按显式组合构建，并支持 LAN/DHCP、Linux 密码、Web 管理账号密码输入
+- **Manual Retest**：`test.yml` 支持按 `run_id` 或 `artifact_id` 复测一整组 CI artifacts，并重新传入 SSH / API 凭据
+- **Release**：推送 `v*` tag 时，`release.yml` 仅 promote 同一 commit 上已通过 CI 的 artifact，校验 tuple metadata 后创建 GitHub Release
 
 ## 许可证
 
 本项目采用 **GPL-3.0** 协议发布，并与上游 [Landscape Router](https://github.com/ThisSeanZhang/landscape) 保持一致。
-
-如果你分发基于本项目构建的镜像或修改版本，请同时留意 GPL-3.0 的相关义务。
