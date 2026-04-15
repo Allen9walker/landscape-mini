@@ -29,16 +29,17 @@ WEB_PORT="${WEB_PORT:-9800}"
 LANDSCAPE_CONTROL_PORT="${LANDSCAPE_CONTROL_PORT:-6443}"
 QEMU_MEM="${QEMU_MEM:-1024}"
 QEMU_SMP="${QEMU_SMP:-2}"
-SSH_PASSWORD="landscape"
-API_USERNAME="root"
-API_PASSWORD="root"
+SSH_PASSWORD="${SSH_PASSWORD:-landscape}"
+API_USERNAME="${API_USERNAME:-root}"
+API_PASSWORD="${API_PASSWORD:-root}"
 SSH_TIMEOUT="${SSH_TIMEOUT:-120}"
 SHUTDOWN_TIMEOUT=15
 LANDSCAPE_TEST_NAME="health"
 LANDSCAPE_IMAGE_PATH="${IMAGE_PATH}"
 
 resolve_default_landscape_version() {
-    awk -F'"' '/^LANDSCAPE_VERSION=/{print $2; exit}' "${PROJECT_DIR}/build.env"
+    source "${PROJECT_DIR}/build.env"
+    printf '%s\n' "${LANDSCAPE_VERSION}"
 }
 
 cleanup() {
