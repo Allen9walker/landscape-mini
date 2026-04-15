@@ -45,6 +45,43 @@ run_in_chroot() {
 }
 
 # ---------------------------------------------------------------------------
+# Helper: retry transient network/package commands
+# ---------------------------------------------------------------------------
+retry_command() {
+    local attempt
+    local max_attempts="${1:-3}"
+    local delay_seconds="${2:-5}"
+
+    shift 2
+
+    for attempt in $(seq 1 "${max_attempts}"); do
+        if "$@"; then
+            return 0
+        fi
+        if [[ "${attempt}" -eq "${max_attempts}" ]]; then
+            echo "ERROR: Command failed after ${attempt} attempts: $*" >&2
+            return 1
+        fi
+        echo "WARN: Command failed on attempt ${attempt}, retrying: $*" >&2
+        sleep "${delay_seconds}"
+    done
+}
+
+# ---------------------------------------------------------------------------
+# Helper: run a command inside chroot with retries
+# ---------------------------------------------------------------------------
+run_in_chroot_retry() {
+    local max_attempts="${1:-3}"
+    local delay_seconds="${2:-5}"
+    local script="$3"
+
+    retry_command "${max_attempts}" "${delay_seconds}" \
+        env LANG=C.UTF-8 LC_ALL=C.UTF-8 chroot "${ROOTFS_DIR}" ${CHROOT_SHELL} -c "set -e
+${script}"
+}
+
+
+# ---------------------------------------------------------------------------
 # Helper: mount special filesystems for chroot
 # ---------------------------------------------------------------------------
 mount_chroot_fs() {

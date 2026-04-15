@@ -46,12 +46,12 @@ backend_bootstrap() {
         mkdir -p "${APK_TOOLS_DIR}"
         local APK_TOOLS_URL="${ALPINE_MIRROR}/${ALPINE_RELEASE}/main/x86_64"
         local APK_TOOLS_PKG
-        APK_TOOLS_PKG=$(curl -sL "${APK_TOOLS_URL}/" | grep -oP 'apk-tools-static-[0-9][^"]*\.apk' | head -1)
+        APK_TOOLS_PKG=$(curl -fsSL --retry 3 --retry-delay 2 "${APK_TOOLS_URL}/" | grep -oP 'apk-tools-static-[0-9][^"]*\.apk' | head -1)
         if [[ -z "${APK_TOOLS_PKG}" ]]; then
             echo "ERROR: Could not find apk-tools-static package at ${APK_TOOLS_URL}/"
             exit 1
         fi
-        curl -L -o "${APK_TOOLS_DIR}/apk-tools-static.apk" "${APK_TOOLS_URL}/${APK_TOOLS_PKG}"
+        retry_command 3 5 curl -fL --retry 3 --retry-delay 2 -o "${APK_TOOLS_DIR}/apk-tools-static.apk" "${APK_TOOLS_URL}/${APK_TOOLS_PKG}"
         tar -xzf "${APK_TOOLS_DIR}/apk-tools-static.apk" -C "${APK_TOOLS_DIR}" sbin/apk.static 2>/dev/null || \
             tar -xf "${APK_TOOLS_DIR}/apk-tools-static.apk" -C "${APK_TOOLS_DIR}" sbin/apk.static
         chmod +x "${APK_STATIC}"
@@ -65,7 +65,7 @@ backend_bootstrap() {
     echo "${ALPINE_MIRROR}/${ALPINE_RELEASE}/main" > "${ROOTFS_DIR}/etc/apk/repositories"
     echo "${ALPINE_MIRROR}/${ALPINE_RELEASE}/community" >> "${ROOTFS_DIR}/etc/apk/repositories"
 
-    "${APK_STATIC}" \
+    retry_command 3 5 "${APK_STATIC}" \
         --root "${ROOTFS_DIR}" \
         --initdb \
         --update-cache \
@@ -122,7 +122,7 @@ EOF
 
     # ---- Install packages ----
     echo "  Installing packages (this may take a while) ..."
-    run_in_chroot "
+    run_in_chroot_retry 3 5 "
         apk update
         apk add --no-cache \
             linux-lts linux-firmware-none \
@@ -198,7 +198,7 @@ EOF
 
     # ---- Timezone ----
     echo "  Setting timezone to ${TIMEZONE} ..."
-    run_in_chroot "
+    run_in_chroot_retry 3 5 "
         apk add tzdata 2>/dev/null || true
         cp /usr/share/zoneinfo/${TIMEZONE} /etc/localtime 2>/dev/null || true
         echo '${TIMEZONE}' > /etc/timezone
@@ -340,24 +340,10 @@ backend_install_docker() {
 
     echo ""
     echo "==== Phase 6: Installing Docker (Alpine) ===="
+    echo "  Docker packages follow ALPINE_MIRROR=${ALPINE_MIRROR}"
 
-    run_in_chroot "
-        retry() {
-            local attempt
-            for attempt in 1 2 3; do
-                if \"\$@\"; then
-                    return 0
-                fi
-                if [ \"\$attempt\" -eq 3 ]; then
-                    echo \"Command failed after \${attempt} attempts: \$*\" >&2
-                    return 1
-                fi
-                echo \"Command failed on attempt \${attempt}, retrying: \$*\" >&2
-                sleep 5
-            done
-        }
-
-        retry apk add docker docker-cli-compose docker-cli-buildx
+    run_in_chroot_retry 3 5 "
+        apk add docker docker-cli-compose docker-cli-buildx
     "
 
     # Configure Docker daemon

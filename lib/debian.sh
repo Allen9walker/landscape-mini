@@ -28,7 +28,8 @@ backend_bootstrap() {
     echo "==== Phase 3: Bootstrapping Debian (${DEBIAN_RELEASE}) ===="
 
     echo "  Running debootstrap --variant=minbase ..."
-    debootstrap \
+    retry_command 3 5 \
+        debootstrap \
         --variant=minbase \
         --include=systemd,systemd-sysv,dbus \
         "${DEBIAN_RELEASE}" \
@@ -123,10 +124,18 @@ EOF
 
     # ---- Install packages ----
     echo "  Installing packages (this may take a while) ..."
-    run_in_chroot "
+    run_in_chroot_retry 3 5 "
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update -y
-        apt-get install -y --no-install-recommends \
+        apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=60 \
+            -o Acquire::https::Timeout=60 \
+            update -y
+        apt-get \
+            -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=60 \
+            -o Acquire::https::Timeout=60 \
+            install -y --no-install-recommends \
             linux-image-amd64 \
             grub-efi-amd64 \
             grub-pc-bin \
@@ -289,24 +298,9 @@ backend_install_docker() {
     echo "==== Phase 6: Installing Docker (Debian) ===="
 
     # Install prerequisites
-    run_in_chroot "
-        retry() {
-            local attempt
-            for attempt in 1 2 3; do
-                if \"\$@\"; then
-                    return 0
-                fi
-                if [ \"\$attempt\" -eq 3 ]; then
-                    echo \"Command failed after \${attempt} attempts: \$*\" >&2
-                    return 1
-                fi
-                echo \"Command failed on attempt \${attempt}, retrying: \$*\" >&2
-                sleep 5
-            done
-        }
-
+    run_in_chroot_retry 3 5 "
         export DEBIAN_FRONTEND=noninteractive
-        retry apt-get \
+        apt-get \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=60 \
             -o Acquire::https::Timeout=60 \
@@ -315,50 +309,20 @@ backend_install_docker() {
     "
 
     # Add Docker GPG key
-    echo "  Adding Docker GPG key ..."
-    run_in_chroot "
-        retry() {
-            local attempt
-            for attempt in 1 2 3; do
-                if \"\$@\"; then
-                    return 0
-                fi
-                if [ \"\$attempt\" -eq 3 ]; then
-                    echo \"Command failed after \${attempt} attempts: \$*\" >&2
-                    return 1
-                fi
-                echo \"Command failed on attempt \${attempt}, retrying: \$*\" >&2
-                sleep 5
-            done
-        }
-
-        retry curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+    echo "  Adding Docker GPG key from ${DOCKER_APT_GPG_URL} ..."
+    run_in_chroot_retry 3 5 "
+        curl -fsSL --retry 3 --retry-delay 2 '${DOCKER_APT_GPG_URL}' -o /etc/apt/keyrings/docker.asc
         chmod a+r /etc/apt/keyrings/docker.asc
     "
 
     # Add Docker repository
-    echo "  Adding Docker repository ..."
+    echo "  Adding Docker repository ${DOCKER_APT_MIRROR} ..."
     local ARCH
     ARCH=$(run_in_chroot "dpkg --print-architecture")
-    run_in_chroot "
-        retry() {
-            local attempt
-            for attempt in 1 2 3; do
-                if \"\$@\"; then
-                    return 0
-                fi
-                if [ \"\$attempt\" -eq 3 ]; then
-                    echo \"Command failed after \${attempt} attempts: \$*\" >&2
-                    return 1
-                fi
-                echo \"Command failed on attempt \${attempt}, retrying: \$*\" >&2
-                sleep 5
-            done
-        }
-
-        echo 'deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian ${DEBIAN_RELEASE} stable' \
+    run_in_chroot_retry 3 5 "
+        echo 'deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.asc] ${DOCKER_APT_MIRROR} ${DEBIAN_RELEASE} stable' \
             > /etc/apt/sources.list.d/docker.list
-        retry apt-get \
+        apt-get \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=60 \
             -o Acquire::https::Timeout=60 \
@@ -367,24 +331,9 @@ backend_install_docker() {
 
     # Install Docker packages
     echo "  Installing Docker packages ..."
-    run_in_chroot "
-        retry() {
-            local attempt
-            for attempt in 1 2 3; do
-                if \"\$@\"; then
-                    return 0
-                fi
-                if [ \"\$attempt\" -eq 3 ]; then
-                    echo \"Command failed after \${attempt} attempts: \$*\" >&2
-                    return 1
-                fi
-                echo \"Command failed on attempt \${attempt}, retrying: \$*\" >&2
-                sleep 5
-            done
-        }
-
+    run_in_chroot_retry 3 5 "
         export DEBIAN_FRONTEND=noninteractive
-        retry apt-get \
+        apt-get \
             -o Acquire::Retries=3 \
             -o Acquire::http::Timeout=60 \
             -o Acquire::https::Timeout=60 \

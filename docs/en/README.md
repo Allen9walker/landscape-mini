@@ -142,6 +142,8 @@ Edit `build.env` or override values with environment variables:
 |------|--------|------|
 | `APT_MIRROR` | `http://deb.debian.org/debian` | Debian package mirror URL |
 | `ALPINE_MIRROR` | `https://dl-cdn.alpinelinux.org/alpine` | Alpine package mirror URL |
+| `DOCKER_APT_MIRROR` | `https://download.docker.com/linux/debian` | Debian Docker APT repository URL |
+| `DOCKER_APT_GPG_URL` | `${DOCKER_APT_MIRROR}/gpg` | Debian Docker APT GPG key URL |
 | `LANDSCAPE_VERSION` | `v0.18.2` | Upstream Landscape version (or specific tag) |
 | `LANDSCAPE_REPO` | `https://github.com/ThisSeanZhang/landscape` | Upstream Landscape release repository |
 | `OUTPUT_FORMAT` | `img` | Output format: `img`, `vmdk`, or `both` |
@@ -169,6 +171,11 @@ If you care about credential hygiene, store password-related values in GitHub Se
 - `CUSTOM_API_PASSWORD`
 
 The workflow records the **credential source** for each field in `build-metadata.txt` (for example, `api_username_source` and `api_password_source`). It also records the actual `api_username` value, but never writes plaintext passwords into artifacts. The effective network topology is bundled as `effective-landscape_init.toml` so `test.yml` and release promotion can validate it.
+
+Notes:
+- Debian Docker builds use `DOCKER_APT_MIRROR` and `DOCKER_APT_GPG_URL`
+- Alpine Docker packages still follow `ALPINE_MIRROR`, so no separate Alpine Docker mirror variable is needed
+- CI workflows still force official upstream defaults to avoid environment drift
 
 ## Disk Partition Layout
 

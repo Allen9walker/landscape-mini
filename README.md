@@ -142,6 +142,8 @@ setup-mirror.sh
 |------|--------|------|
 | `APT_MIRROR` | `http://deb.debian.org/debian` | Debian 软件源地址 |
 | `ALPINE_MIRROR` | `https://dl-cdn.alpinelinux.org/alpine` | Alpine 软件源地址 |
+| `DOCKER_APT_MIRROR` | `https://download.docker.com/linux/debian` | Debian Docker APT 仓库地址 |
+| `DOCKER_APT_GPG_URL` | `${DOCKER_APT_MIRROR}/gpg` | Debian Docker APT GPG key 地址 |
 | `LANDSCAPE_VERSION` | `v0.18.2` | 上游 Landscape 版本号（或指定 tag） |
 | `LANDSCAPE_REPO` | `https://github.com/ThisSeanZhang/landscape` | 上游 Landscape 发布仓库 |
 | `OUTPUT_FORMAT` | `img` | 输出格式：`img`、`vmdk`、`both` |
@@ -169,6 +171,11 @@ setup-mirror.sh
 - `CUSTOM_API_PASSWORD`
 
 workflow 会把**凭据来源信息**按字段写入 `build-metadata.txt`（例如 `api_username_source` / `api_password_source`），同时会记录 `api_username` 的实际值，但不会把密码明文写入 artifact。网络拓扑的有效配置会随 artifact 一起携带为 `effective-landscape_init.toml`，供 `test.yml` 和 release promotion 校验使用。
+
+说明：
+- Debian 的 Docker 构建阶段使用 `DOCKER_APT_MIRROR` / `DOCKER_APT_GPG_URL`
+- Alpine 的 Docker 包仍然跟随 `ALPINE_MIRROR`，不额外引入单独 Docker 镜像变量
+- CI workflow 默认仍强制回退到官方上游源，避免环境漂移
 
 ## 磁盘分区布局
 

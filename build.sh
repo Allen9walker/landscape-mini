@@ -134,6 +134,9 @@ else
     MIRROR="${APT_MIRROR}"
 fi
 
+DOCKER_MIRROR_DISPLAY="${DOCKER_APT_MIRROR}"
+DOCKER_GPG_DISPLAY="${DOCKER_APT_GPG_URL}"
+
 echo "============================================================"
 echo "  Landscape Mini - x86 UEFI Image Builder"
 echo "============================================================"
@@ -149,6 +152,14 @@ else
 fi
 echo "  Image Size        : ${IMAGE_SIZE_MB} MB"
 echo "  Include Docker    : ${INCLUDE_DOCKER}"
+if [[ "${INCLUDE_DOCKER}" == "yes" && "${BASE_SYSTEM}" == "debian" ]]; then
+    echo "  Docker APT Mirror : ${DOCKER_MIRROR_DISPLAY}"
+    if [[ "${DOCKER_GPG_DISPLAY}" != "${DOCKER_MIRROR_DISPLAY}/gpg" ]]; then
+        echo "  Docker GPG URL    : ${DOCKER_GPG_DISPLAY}"
+    fi
+elif [[ "${INCLUDE_DOCKER}" == "yes" && "${BASE_SYSTEM}" == "alpine" ]]; then
+    echo "  Docker Source     : Alpine packages via ${ALPINE_MIRROR}"
+fi
 echo "  Output Format     : ${OUTPUT_FORMAT}"
 echo "  Compress Output   : ${COMPRESS_OUTPUT}"
 echo "  Config Profile    : ${EFFECTIVE_CONFIG_PROFILE}"
