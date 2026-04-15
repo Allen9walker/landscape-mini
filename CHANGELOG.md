@@ -1,7 +1,7 @@
 # Changelog / 变更日志
 
-All notable changes to this project will be documented in this file.
-本文件记录项目的所有重要变更。
+This file currently tracks unreleased work and recent notable changes.
+本文件当前记录未发布改动与近期的重要变更。
 
 ## [Unreleased]
 

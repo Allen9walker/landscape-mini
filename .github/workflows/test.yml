@@ -24,6 +24,7 @@ on:
 
 jobs:
   test:
+    if: ${{ github.event.inputs.artifact_id == '' || startsWith(github.event.inputs.artifact_id, format('{0}-docker-{1}-', matrix.base_system, matrix.include_docker)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -130,13 +131,6 @@ jobs:
 
           if [ -n "$requested_artifact_id" ]; then
             artifact_id="$requested_artifact_id"
-            case "$artifact_id" in
-              ${tuple_prefix}*) ;;
-              *)
-                echo "Requested artifact_id $artifact_id does not match matrix tuple ${tuple_prefix}" >&2
-                exit 1
-                ;;
-            esac
             if [ -z "$run_id" ]; then
               run_id="${artifact_id##*-}"
             fi

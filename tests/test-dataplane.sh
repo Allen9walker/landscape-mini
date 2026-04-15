@@ -25,7 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
-IMAGE_PATH="${1:-${PROJECT_DIR}/output/landscape-mini-x86.img}"
+IMAGE_PATH="${1:-${PROJECT_DIR}/output/landscape-mini-x86-debian.img}"
 SSH_PORT="${SSH_PORT:-2222}"
 WEB_PORT="${WEB_PORT:-9800}"
 LANDSCAPE_CONTROL_PORT="${LANDSCAPE_CONTROL_PORT:-6443}"
