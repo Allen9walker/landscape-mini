@@ -244,6 +244,7 @@ jobs:
             grub-efi-amd64-bin grub-pc-bin qemu-utils rsync curl
 
       - name: Build image (${{ inputs.base_system }}, docker=${{ inputs.include_docker }})
+        timeout-minutes: 9
         env:
           RESOLVED_VERSION: ${{ steps.meta.outputs.resolved_version }}
           EFFECTIVE_CONFIG_PATH: ${{ github.workspace }}/output/metadata/effective-landscape_init.toml
@@ -276,25 +277,48 @@ jobs:
             format_flags+=(--output-format "$fmt")
           done
 
-          sudo APT_MIRROR="" ALPINE_MIRROR="" \
-            EFFECTIVE_CONFIG_PATH="${EFFECTIVE_CONFIG_PATH}" \
-            EFFECTIVE_CONFIG_PROFILE="${EFFECTIVE_CONFIG_PROFILE}" \
-            EFFECTIVE_TOPOLOGY_SOURCE="${EFFECTIVE_TOPOLOGY_SOURCE}" \
-            ROOT_PASSWORD="${ROOT_PASSWORD}" \
-            ROOT_PASSWORD_SOURCE="${ROOT_PASSWORD_SOURCE}" \
-            LANDSCAPE_ADMIN_USER="${LANDSCAPE_ADMIN_USER}" \
-            LANDSCAPE_ADMIN_USER_SOURCE="${LANDSCAPE_ADMIN_USER_SOURCE}" \
-            LANDSCAPE_ADMIN_PASS="${LANDSCAPE_ADMIN_PASS}" \
-            LANDSCAPE_ADMIN_PASS_SOURCE="${LANDSCAPE_ADMIN_PASS_SOURCE}" \
-            RUN_TEST="none" \
-            RELEASE_CHANNEL="${RELEASE_CHANNEL}" \
-            RELEASE_TAG="${RELEASE_TAG}" \
-            REPOSITORY_OWNER="${REPOSITORY_OWNER}" \
-            ./build.sh \
-            "${version_flag[@]}" \
-            --base-system "${{ inputs.base_system }}" \
-            --include-docker "${{ inputs.include_docker }}" \
-            "${format_flags[@]}"
+          config_backup="$(mktemp)"
+          cp "${EFFECTIVE_CONFIG_PATH}" "$config_backup"
+          trap 'rm -f "$config_backup"' EXIT
+
+          run_build() {
+            timeout --foreground 4m \
+              sudo APT_MIRROR="" ALPINE_MIRROR="" \
+              EFFECTIVE_CONFIG_PATH="${EFFECTIVE_CONFIG_PATH}" \
+              EFFECTIVE_CONFIG_PROFILE="${EFFECTIVE_CONFIG_PROFILE}" \
+              EFFECTIVE_TOPOLOGY_SOURCE="${EFFECTIVE_TOPOLOGY_SOURCE}" \
+              ROOT_PASSWORD="${ROOT_PASSWORD}" \
+              ROOT_PASSWORD_SOURCE="${ROOT_PASSWORD_SOURCE}" \
+              LANDSCAPE_ADMIN_USER="${LANDSCAPE_ADMIN_USER}" \
+              LANDSCAPE_ADMIN_USER_SOURCE="${LANDSCAPE_ADMIN_USER_SOURCE}" \
+              LANDSCAPE_ADMIN_PASS="${LANDSCAPE_ADMIN_PASS}" \
+              LANDSCAPE_ADMIN_PASS_SOURCE="${LANDSCAPE_ADMIN_PASS_SOURCE}" \
+              RUN_TEST="none" \
+              RELEASE_CHANNEL="${RELEASE_CHANNEL}" \
+              RELEASE_TAG="${RELEASE_TAG}" \
+              REPOSITORY_OWNER="${REPOSITORY_OWNER}" \
+              ./build.sh \
+              "${version_flag[@]}" \
+              --base-system "${{ inputs.base_system }}" \
+              --include-docker "${{ inputs.include_docker }}" \
+              "${format_flags[@]}"
+          }
+
+          attempt=1
+          until run_build; do
+            status=$?
+            if [ "$attempt" -ge 2 ]; then
+              echo "Build failed after ${attempt} attempts" >&2
+              exit "$status"
+            fi
+
+            echo "Build attempt ${attempt} failed with status ${status}; resetting workspace and retrying..." >&2
+            sudo rm -rf work
+            sudo rm -f output/*.img output/*.vmdk output/*.ova output/metadata/build-metadata.txt
+            mkdir -p output/metadata
+            cp "$config_backup" "${EFFECTIVE_CONFIG_PATH}"
+            attempt=$((attempt + 1))
+          done
 
       - name: Fix output permissions
         run: sudo chown -R "$(id -u):$(id -g)" output/ work/
