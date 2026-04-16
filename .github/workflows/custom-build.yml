@@ -349,6 +349,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
       RELEASE_TAG: custom-build-latest
     steps:
       - name: Download image artifact
@@ -435,11 +436,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release delete "$RELEASE_TAG" --yes --cleanup-tag
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release delete "$RELEASE_TAG" --repo "$GH_REPO" --yes --cleanup-tag
           fi
 
           gh release create "$RELEASE_TAG" release-assets/* \
+            --repo "$GH_REPO" \
             --target "$GITHUB_SHA" \
             --title "Custom Build Latest" \
             --notes "Latest successful custom build for this repository owner. Assets are replaced on each successful run." \
