@@ -477,6 +477,23 @@ LANDSCAPE_ROUTER_DIAGNOSTICS_FILE=""
 LANDSCAPE_TEST_METADATA_FILE=""
 LANDSCAPE_ROUTER_API_TOKEN=""
 LANDSCAPE_TEST_NAME="${LANDSCAPE_TEST_NAME:-test}"
+LANDSCAPE_ROUTER_EXPAND_IMAGE_BYTES="${LANDSCAPE_ROUTER_EXPAND_IMAGE_BYTES:-}"
+
+landscape_expand_raw_image() {
+    local image_path="$1"
+    local expand_bytes="$2"
+    local current_size=""
+    local target_size=""
+
+    if [[ -z "$expand_bytes" ]]; then
+        return 0
+    fi
+
+    current_size=$(stat -c '%s' "$image_path")
+    target_size=$((current_size + expand_bytes))
+    truncate -s "$target_size" "$image_path"
+}
+
 
 landscape_router_init_paths() {
     local prefix="$1"
@@ -551,6 +568,7 @@ landscape_router_start_vm() {
 
     LANDSCAPE_ROUTER_TEMP_IMAGE=$(mktemp "${LANDSCAPE_TEST_LOG_DIR}/${LANDSCAPE_TEST_NAME}-router-XXXXXX.img")
     cp "${image_path}" "${LANDSCAPE_ROUTER_TEMP_IMAGE}"
+    landscape_expand_raw_image "${LANDSCAPE_ROUTER_TEMP_IMAGE}" "${LANDSCAPE_ROUTER_EXPAND_IMAGE_BYTES}"
 
     LANDSCAPE_ROUTER_PIDFILE=$(mktemp "${LANDSCAPE_TEST_LOG_DIR}/${LANDSCAPE_TEST_NAME}-router-pid-XXXXXX")
     LANDSCAPE_ROUTER_MONITOR=$(mktemp -u "${LANDSCAPE_TEST_LOG_DIR}/${LANDSCAPE_TEST_NAME}-router-monitor-XXXXXX.sock")

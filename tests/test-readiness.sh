@@ -36,6 +36,7 @@ SSH_TIMEOUT="${SSH_TIMEOUT:-120}"
 SHUTDOWN_TIMEOUT=15
 LANDSCAPE_TEST_NAME="readiness"
 LANDSCAPE_IMAGE_PATH="${IMAGE_PATH}"
+ALPINE_EXPAND_TEST_DELTA_BYTES=$((2 * 1024 * 1024 * 1024))
 
 resolve_default_landscape_version() {
     source "${PROJECT_DIR}/build.env"
@@ -80,7 +81,7 @@ preflight() {
         exit 2
     }
 
-    if ! require_commands qemu-system-x86_64 sshpass curl socat jq awk; then
+    if ! require_commands qemu-system-x86_64 sshpass curl socat jq awk truncate; then
         error "Run 'make deps-test' to install test dependencies."
         exit 2
     fi
@@ -93,10 +94,36 @@ preflight() {
     landscape_router_init_paths "readiness"
 
     landscape_load_test_identity "${IMAGE_PATH}" || true
+    if [[ "${LANDSCAPE_TEST_BASE_SYSTEM:-}" == "alpine" ]]; then
+        LANDSCAPE_ROUTER_EXPAND_IMAGE_BYTES="${LANDSCAPE_ROUTER_EXPAND_IMAGE_BYTES:-$ALPINE_EXPAND_TEST_DELTA_BYTES}"
+    fi
     LANDSCAPE_TEST_LANDSCAPE_VERSION="${LANDSCAPE_TEST_LANDSCAPE_VERSION:-$(resolve_default_landscape_version)}"
     landscape_write_test_metadata "${IMAGE_PATH}"
 
     ok "Preflight passed"
+}
+
+auto_expand_rootfs_check() {
+    local root_source=""
+    local root_disk=""
+    local part_num=""
+    local output=""
+
+    root_source="$(guest_run "findmnt -n -o SOURCE /" 2>/dev/null || true)"
+    case "$root_source" in
+        /dev/*) ;;
+        *)
+            return 1
+            ;;
+    esac
+
+    root_disk="$(guest_run "lsblk -nro PKNAME '$root_source' | head -1" 2>/dev/null || true)"
+    part_num="$(guest_run "lsblk -nro PARTN '$root_source' | head -1" 2>/dev/null || true)"
+
+    [[ -n "$root_disk" && -n "$part_num" ]] || return 1
+
+    output="$(guest_run "growpart -N '/dev/$root_disk' '$part_num'" 2>&1 || true)"
+    contains_text "$output" "NOCHANGE:"
 }
 
 run_smoke_checks() {
@@ -144,6 +171,12 @@ run_smoke_checks() {
         run_check "Docker image is functional" docker_functional_check
     else
         run_skip "Docker image is functional" "Docker not expected for include_docker=${LANDSCAPE_TEST_INCLUDE_DOCKER:-unknown}"
+    fi
+
+    if [[ "${LANDSCAPE_TEST_BASE_SYSTEM:-}" == "alpine" ]]; then
+        run_check "Alpine auto-expands rootfs on first boot" auto_expand_rootfs_check
+    else
+        run_skip "Alpine auto-expands rootfs on first boot" "base_system=${LANDSCAPE_TEST_BASE_SYSTEM:-unknown}"
     fi
 
     echo ""

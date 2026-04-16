@@ -321,7 +321,7 @@ backend_install_landscape_services() {
     echo "  Enabling landscape-router service ..."
     run_in_chroot "rc-update add landscape-router default"
     echo "  Enabling expand-rootfs service ..."
-    run_in_chroot "rc-update add expand-rootfs boot"
+    run_in_chroot "rc-update add expand-rootfs default"
 }
 
 # =============================================================================
