@@ -137,7 +137,11 @@ EOF
             -o Acquire::https::Timeout=60 \
             install -y --no-install-recommends \
             linux-image-amd64 \
-            firmware-linux \
+            firmware-linux-free \
+            firmware-intel-misc \
+            firmware-realtek \
+            firmware-bnx2 \
+            firmware-bnx2x \
             grub-efi-amd64 \
             grub-pc-bin \
             initramfs-tools \

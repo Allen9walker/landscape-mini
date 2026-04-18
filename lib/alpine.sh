@@ -118,12 +118,18 @@ UUID=${ROOT_UUID}   /           ext4    errors=remount-ro   0       1
 UUID=${EFI_UUID}    /boot/efi   vfat    umask=0077          0       2
 EOF
 
-    # ---- Install packages ----
+# ---- Install packages ----
     echo "  Installing packages (this may take a while) ..."
+    # Keep targeted wired-NIC firmware only. Avoid the full linux-firmware meta-package,
+    # which pulls in large GPU/Wi-Fi/SoC firmware sets unrelated to this x86 router image.
     run_in_chroot_retry 3 5 "
         apk update
         apk add --no-cache \
-            linux-lts linux-firmware \
+            linux-lts \
+            linux-firmware-rtl_nic \
+            linux-firmware-bnx2 \
+            linux-firmware-bnx2x \
+            linux-firmware-e100 \
             grub-efi grub-bios \
             mkinitfs \
             e2fsprogs e2fsprogs-extra \
@@ -385,7 +391,7 @@ backend_cleanup() {
         # binutils — only bpftool needs libbfd/libopcodes at runtime
         rm -f /usr/bin/dwp /usr/bin/ld /usr/bin/ld.bfd /usr/bin/as
         rm -f /usr/bin/readelf /usr/bin/objdump /usr/bin/objcopy
-        rm -f /usr/bin/strip /usr/bin/strings /usr/bin/nm /usr/bin/addr2line
+        rm -f /usr/bin/strip /usr/bin/nm /usr/bin/addr2line
         rm -f /usr/bin/size /usr/bin/ranlib /usr/bin/ar /usr/bin/elfedit
         rm -f /usr/bin/gprof /usr/bin/c++filt
         rm -rf /usr/x86_64-alpine-linux-musl
@@ -394,7 +400,8 @@ backend_cleanup() {
         rm -rf /usr/lib/python3* /usr/lib/libpython3* /usr/bin/python3*
 
         # libslang — only needed by perf TUI
-        rm -f /usr/lib/libslang.so* /usr/lib/slang/
+        rm -f /usr/lib/libslang.so*
+        rm -rf /usr/lib/slang
         rm -rf /usr/share/slsh
 
         # libstdc++ — needed by bpftool? check later, keep for safety
@@ -420,6 +427,7 @@ backend_cleanup() {
         if [ -n \"\$KVER\" ]; then
             mkinitfs -c /etc/mkinitfs/mkinitfs.conf \"\$KVER\"
         fi
+        rm -f /usr/bin/strings
     "
 
     # ---- Clean apk cache ----
