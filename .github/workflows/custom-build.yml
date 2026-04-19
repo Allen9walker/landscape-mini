@@ -527,11 +527,28 @@ jobs:
             exit 1
           fi
 
+          latest_release_url="https://github.com/${GH_REPO}/releases/tag/${RELEASE_TAG}"
+          notes_file="$(mktemp)"
+          {
+            echo 'Latest successful custom build for this repository owner.'
+            echo ''
+            echo 'Copy-ready latest release page:'
+            echo ''
+            printf '`%s`\n' "$latest_release_url"
+            echo ''
+            echo 'Copy-ready direct download links:'
+            echo ''
+            for asset_path in "${latest_files[@]}"; do
+              asset_name="$(basename "$asset_path")"
+              printf -- '- `%s`\n' "https://github.com/${GH_REPO}/releases/download/${RELEASE_TAG}/${asset_name}"
+            done
+          } > "$notes_file"
+
           if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" \
               --repo "$GH_REPO" \
               --title "Custom Build Latest" \
-              --notes "Latest successful custom build for this repository owner. Direct links below always point to the newest successful run."
+              --notes-file "$notes_file"
 
             while IFS= read -r existing_asset; do
               case "$existing_asset" in
@@ -550,7 +567,7 @@ jobs:
               --repo "$GH_REPO" \
               --target "$GITHUB_SHA" \
               --title "Custom Build Latest" \
-              --notes "Latest successful custom build for this repository owner. Direct links below always point to the newest successful run." \
+              --notes-file "$notes_file" \
               --prerelease
           fi
 
